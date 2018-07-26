@@ -7,6 +7,7 @@ program
   .version('1.1.2')
   .option('-i, --index [index]', 'name of index file used for library', 'index.ts')
   .option('-d, --destination [destination]', 'folder name used when generating files', 'endpoints')
+  .option('-g, --graphql', 'add graphql schema and resolvers')
   .action(endpointCommand);
 
 program.parse(process.argv);

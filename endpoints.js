@@ -1,12 +1,11 @@
 // Modifying to add graphql schema and resolvers
-
+const { kebabCase, camelCase } = require('lodash');
 const fetch = require('isomorphic-fetch');
 const R = require('ramda');
 const fs = require('fs');
 const path = require('path');
 const Progress = require('progress');
 const pascalCase = require('to-pascal-case');
-const S = require('string');
 const Handlebars = require('handlebars');
 
 const ENDOINTS_URL ='http://procore-api-documentation-staging.s3-website-us-east-1.amazonaws.com';
@@ -79,7 +78,8 @@ const removeNonProductionEndpoints = (endpoints) => new Promise(
   }
 );
 
-const endpointCommand = (to, { destination, index }) => {
+const endpointCommand = (to, { destination, index, graphql }) => {
+  console.log('graphql:',graphql);
   return fetch(`${ENDOINTS_URL}/master/groups.json`)
     .then((res) => {
       return res.json().catch((err) => {
@@ -106,19 +106,14 @@ const endpointCommand = (to, { destination, index }) => {
       return Promise.all(
         groups.map(({ name }) => {
           const endpointName = name.toLowerCase()
-
-          const alreadySnakeCase = /^[a-z_]*$/.test(endpointName);
-
-          const gelatoGroup = alreadySnakeCase ?
-            S(endpointName) :
-            S(endpointName).dasherize().s;
-
+          const gelatoGroup = kebabCase(endpointName);
           return fetch(`${ENDOINTS_URL}/master/${gelatoGroup}.json`)
             .then((res) => res.json())
             .then(removeNonProductionEndpoints)
-            .then(([{ path: endpointPath, path_params, query_params }]) => {
+            .then(grp => {
+              const [{ path: endpointPath, path_params, query_params }] = grp;
               fs.readFile(endpointTemplatePath, 'utf8', (err, data) => {
-                const camelizedEndpointName = S(endpointName).camelize().s;
+                const camelizedEndpointName = camelCase(endpointName);
 
                 const pascalCaseEndpointName = pascalCase(endpointName);
 
