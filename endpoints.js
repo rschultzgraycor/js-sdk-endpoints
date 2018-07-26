@@ -1,5 +1,5 @@
 // Modifying to add graphql schema and resolvers
-const { kebabCase, camelCase } = require('lodash');
+const { kebabCase, camelCase, filter } = require('lodash');
 const fetch = require('isomorphic-fetch');
 const R = require('ramda');
 const fs = require('fs');
@@ -56,28 +56,6 @@ Handlebars.registerHelper(
   )
 );
 
-const isProductionGroup = R.compose(
-  R.equals('production'),
-  R.prop('highest_support_level')
-);
-
-const removeNonProductionGroups = (groups) => new Promise(
-  (resolve, reject) => {
-    resolve(R.filter(isProductionGroup, groups))
-  }
-);
-
-const isProductionEndpoint = R.compose(
-  R.equals('production'),
-  R.prop('support_level')
-);
-
-const removeNonProductionEndpoints = (endpoints) => new Promise(
-  (resolve, reject) => {
-    resolve(R.filter(isProductionEndpoint, endpoints))
-  }
-);
-
 const endpointCommand = (to, { destination, index, graphql }) => {
   console.log('graphql:',graphql);
   return fetch(`${ENDOINTS_URL}/master/groups.json`)
@@ -89,7 +67,7 @@ const endpointCommand = (to, { destination, index, graphql }) => {
         throw err;
       });
     })
-    .then(removeNonProductionGroups)
+    .then(groups => filter(groups, { highest_support_level: 'production', }))
     .then((groups) => {
       const bar = new Progress(':bar :percent', { total: groups.length });
 
@@ -109,7 +87,7 @@ const endpointCommand = (to, { destination, index, graphql }) => {
           const gelatoGroup = kebabCase(endpointName);
           return fetch(`${ENDOINTS_URL}/master/${gelatoGroup}.json`)
             .then((res) => res.json())
-            .then(removeNonProductionEndpoints)
+            .then(groups => filter(groups, { support_level: 'production', }))
             .then(grp => {
               const [{ path: endpointPath, path_params, query_params }] = grp;
               fs.readFile(endpointTemplatePath, 'utf8', (err, data) => {
