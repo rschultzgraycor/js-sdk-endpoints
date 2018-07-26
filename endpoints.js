@@ -1,3 +1,5 @@
+// Modifying to add graphql schema and resolvers
+
 const fetch = require('isomorphic-fetch');
 const R = require('ramda');
 const fs = require('fs');
