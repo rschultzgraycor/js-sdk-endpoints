@@ -4,8 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const pascalCase = require('to-pascal-case');
 
-let _mutations = {};
-
 const parseItemType = (type,name) => {
   switch (type) {
     case 'string':
@@ -128,11 +126,43 @@ const processQueries = (params, name, _queries) => {
   _queries.push(query);
 }
 
+const parseTypes = (_types) => {
+  types = '';
+  map(_types, mainType => {
+    types += `\n\ttype ${mainType.typeName} {\n`;
+    map(mainType.items, ({type, name, isArray}) => {
+      types += `\t\t${name}: ${(isArray) ? '[' : ''}${parseItemType(type)}${(isArray) ? ']' : ''},\n`;
+    })
+    types += `\t}\n`;
+  })
+  types += `\n\ttype Query {\n`;
+  return types;
+}
+
+const parseQueryTypes = (_queries) => {
+  types = '';
+  map(_queries, queryType => {
+    types += `\t\t${queryType.queryName}(`;
+    map(queryType.items, ({name, type, isArray, isRequired}) => {
+      types += `${name}: ${(isArray) ? '[' : ''}${parseItemType(type)}${(isRequired) ? '!' : ''}${(isArray) ? ']' : ''},`;
+    })
+    types = `${(types.substring(types.length-1) === ',') ? types.substring(0,types.length-1) : types}): ${pascalCase(queryType.queryName)}Type,\n`;
+  })
+  return types;
+}
+
+const parseMutations = (_mutations) => {
+  mutations = '';
+
+  return mutations;
+}
+
 const processData = (data) => {
   let response = '';
   let query = '';
   let _types = [];
   let _queries = [];
+  let _mutations = [];
   // What columns do we want out of the data;
   const picks = ['path','summary','query_params','responses'];
   let types = 'const typeDefs = `';
@@ -151,26 +181,22 @@ const processData = (data) => {
       //processPathParams(eachGet.path_params, eachGet.summary);
     }
   })
-  map(_types, mainType => {
-    types += `\n\ttype ${mainType.typeName} {\n`;
-    map(mainType.items, ({type, name, isArray}) => {
-      types += `\t\t${name}: ${(isArray) ? '[' : ''}${parseItemType(type)}${(isArray) ? ']' : ''},\n`;
-    })
-    types += `\t}\n`;
-  })
-  types += `\n\ttype Query {\n`;
-  map(_queries, queryType => {
-    types += `\t\t${queryType.queryName}(`;
-    map(queryType.items, ({name, type, isArray, isRequired}) => {
-      types += `${name}: ${(isArray) ? '[' : ''}${parseItemType(type)}${(isRequired) ? '!' : ''}${(isArray) ? ']' : ''},`;
-    })
-    types = `${(types.substring(types.length-1) === ',') ? types.substring(0,types.length-1) : types}): ${pascalCase(queryType.queryName)}Type,\n`;
-  })
+  types += parseTypes(_types);
+  types += parseQueryTypes(_queries);
   types += '\t}'
   types += '`;'
 
+  // Start response
+  response += `import { makeExecutableSchema } from 'graphql-tools';\n\n`;
+
   // Add types to response
   response += types;
+
+  // Add mutations
+  response += parseMutations(_mutations);
+
+  // Finish it up
+  response += `\n\nconst schema = makeExecutableSchema({\n\ttypeDefs,\n\tresolvers,\n});\n\nexport default schema;`;
 
   return response;
   // Post
