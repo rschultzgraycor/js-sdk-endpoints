@@ -191,12 +191,12 @@ const parseTypes = (_types) => {
     })
     types += `\t}\n`;
   })
-  types += `\n\ttype Query {\n`;
+  //types += `\n\ttype Query {\n`;
   return types;
 }
 
 const parseQueryTypes = (_queries) => {
-  types = '';
+  types = `\n\ttype Query {\n`;
   map(_queries, queryType => {
       types += `\t\t${queryType.queryName}(`;
       map(queryType.items, ({name, type, isArray, isRequired}) => {
@@ -204,12 +204,20 @@ const parseQueryTypes = (_queries) => {
       });
       types = `${(types.substring(types.length-1) === ',') ? types.substring(0,types.length-1) : types}): ${pascalCase(queryType.queryName)}Type,\n`;
   })
+  types += `\t}\n`;
   return types;
 }
 
 const parseMutationTypes = (_mutations) => {
-  mutations = '';
-
+  mutations = `\n\ttype Mutation {\n`;
+  map(_mutations, mutationType => {
+    mutations += `\t\t${mutationType.mutationName}(`;
+    map(mutationType.items, ({name, type, isArray, isRequired}) => {
+      mutations += `${name}: ${(isArray) ? '[' : ''}${parseItemType(type)}${(isRequired) ? '!' : ''}${(isArray) ? ']' : ''},`;
+    });
+    mutations = `${(mutations.substring(mutations.length-1) === ',') ? mutations.substring(0,mutations.length-1) : mutations}): ${pascalCase(mutationType.mutationName)}Type,\n`;
+  })
+  mutations += `\t}\n`;
   return mutations;
 }
 
@@ -273,12 +281,16 @@ const processData = (data) => {
   types += parseTypes(_types);
   types += parseQueryTypes(_queries);
   types += parseMutationTypes(_mutations);
-  types += '\t}'
-  types += '`;'
+  types += '`;\n\n'
 
   // resolvers
   let resolvers = 'const resolvers = {\n';
-  resolvers += '}\n\n';
+
+  // Query resolvers
+
+  // Mutation resolvers
+
+  resolvers += '};';
 
   // Start response
   response += `import { makeExecutableSchema } from 'graphql-tools';\n\n`;
