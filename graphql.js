@@ -82,7 +82,7 @@ const processSchema = (schema, preName, _types) => {
       const properties = schema.properties
       mainType.items = navigatePropertiesArray(properties, mainType.typeName, _types);
     } else if (type === 'file') {
-      console.log('Unsupported File Type');
+      console.log('Unsupported File Type: file');
     } else if (type === 'string' || type === 'integer' || type === 'boolean' || type === 'number') {
       mainType.items = [];
       let item = {};
@@ -99,10 +99,65 @@ const processSchema = (schema, preName, _types) => {
   }
 }
 
-const processQueries = (params, name, _queries) => {
+const processMutations = (qParams, pParams, bParams, name, _mutations) => {
+  let mutation = {};
+  mutation.mutationName = pascalCase(name);
+  mutation.items = [];
+
+  if (pParams) {
+    for (let i=0;i<pParams.length;i+=1) {
+      const param = pParams[i];
+      let newItem = {};
+      if (param.name !== null) {
+        newItem.name = param.name;
+        newItem.isRequired = param.required;
+        newItem.type = param.type;
+        newItem.isArray = false;
+        mutation.items.push(newItem);
+      }
+    }
+  }
+  for (let i=0;i<qParams.length;i+=1) {
+    const param = qParams[i];
+    let newItem = {};
+    if (param.name !== null) {
+      newItem.name = param.name;
+      newItem.isRequired = param.required;
+      newItem.isArray = false;
+      if (param.type === 'array') {
+        if (param.name.indexOf('id')>-1) {
+          newItem.type = 'integer';
+          newItem.isArray = true;
+        } else {
+          newItem.type = param.type;
+        }
+      } else {
+        newItem.type = param.type;
+      }
+      mutation.items.push(newItem);
+    }
+  }
+
+  _mutations.push(mutation);
+}
+
+const processQueries = (params, pathParams, name, _queries) => {
   let query = {};
   query.queryName = pascalCase(name);
   query.items = [];
+  if (pathParams) {
+    for (let i=0;i<pathParams.length;i+=1) {
+      const param = pathParams[i];
+      let newItem = {};
+      if (param.name !== null) {
+        newItem.name = param.name;
+        newItem.isRequired = param.required;
+        newItem.type = param.type;
+        newItem.isArray = false;
+        query.items.push(newItem);
+      }
+    }
+  }
   for (let i=0;i<params.length;i+=1) {
     const param = params[i];
     let newItem = {};
@@ -123,6 +178,7 @@ const processQueries = (params, name, _queries) => {
       query.items.push(newItem);
     }
   }
+
   _queries.push(query);
 }
 
@@ -142,20 +198,22 @@ const parseTypes = (_types) => {
 const parseQueryTypes = (_queries) => {
   types = '';
   map(_queries, queryType => {
-    types += `\t\t${queryType.queryName}(`;
-    map(queryType.items, ({name, type, isArray, isRequired}) => {
-      types += `${name}: ${(isArray) ? '[' : ''}${parseItemType(type)}${(isRequired) ? '!' : ''}${(isArray) ? ']' : ''},`;
-    })
-    types = `${(types.substring(types.length-1) === ',') ? types.substring(0,types.length-1) : types}): ${pascalCase(queryType.queryName)}Type,\n`;
+      types += `\t\t${queryType.queryName}(`;
+      map(queryType.items, ({name, type, isArray, isRequired}) => {
+        types += `${name}: ${(isArray) ? '[' : ''}${parseItemType(type)}${(isRequired) ? '!' : ''}${(isArray) ? ']' : ''},`;
+      });
+      types = `${(types.substring(types.length-1) === ',') ? types.substring(0,types.length-1) : types}): ${pascalCase(queryType.queryName)}Type,\n`;
   })
   return types;
 }
 
-const parseMutations = (_mutations) => {
+const parseMutationTypes = (_mutations) => {
   mutations = '';
 
   return mutations;
 }
+
+const filterResponses = (responses,status) => filter(responses, { status })[0];
 
 const processData = (data) => {
   let response = '';
@@ -164,27 +222,63 @@ const processData = (data) => {
   let _queries = [];
   let _mutations = [];
   // What columns do we want out of the data;
-  const picks = ['path','summary','query_params','responses'];
+  const picks = ['path','summary','query_params','responses','path_params','body_params'];
   let types = 'const typeDefs = `';
   // Gets
   const gets = map(filter(data, { verb: 'get', support_level: 'production'}), partialRight(pick, picks));
+  const posts = map(filter(data, { verb: 'post', support_level: 'production'}), partialRight(pick, picks));
+  const patches = map(filter(data, { verb: 'patch', support_level: 'production'}), partialRight(pick, picks));
+  const deletes = map(filter(data, { verb: 'delete', support_level: 'production'}), partialRight(pick, picks));
 
+  // Process Gets
   map(gets, eachGet => {
-    let response = filter(eachGet.responses, { status: '200' })[0];
+    let response = filterResponses(eachGet.responses, '200');
     if (response) {
       const respSchema = response.schema;
       // Get the schema types
       processSchema(respSchema, eachGet.summary, _types);
       // Get the query types
-      processQueries(eachGet.query_params, eachGet.summary, _queries);
-      // Figure out what to do with the path parameters
-      //processPathParams(eachGet.path_params, eachGet.summary);
+      processQueries(eachGet.query_params, eachGet.path_params, eachGet.summary, _queries);
     }
   })
+
+  // Process Posts
+  map(posts, eachPost => {
+    let response = filterResponses(eachPost.responses, '201');
+    if (response) {
+      const respSchema = response.schema;
+      // Get the schema types
+      processSchema(respSchema, eachPost.summary, _types);
+      // Get the mutation types
+      processMutations(eachPost.query_params, eachPost.path_params, eachPost.body_params, eachPost.summary, _mutations);
+    }
+  })
+
+  // Process Patches
+  map(patches, eachPatch => {
+    let response = filterResponses(eachPatch.responses, '200');
+    if (response) {
+
+    }
+  })
+
+  // Process Deletes
+  map(deletes, eachDelete => {
+    let response = filterResponses(eachDelete.responses, '200');
+    if (response) {
+
+    }
+  })
+
   types += parseTypes(_types);
   types += parseQueryTypes(_queries);
+  types += parseMutationTypes(_mutations);
   types += '\t}'
   types += '`;'
+
+  // resolvers
+  let resolvers = 'const resolvers = {\n';
+  resolvers += '}\n\n';
 
   // Start response
   response += `import { makeExecutableSchema } from 'graphql-tools';\n\n`;
@@ -192,19 +286,13 @@ const processData = (data) => {
   // Add types to response
   response += types;
 
-  // Add mutations
-  response += parseMutations(_mutations);
+  // Add mutation types
+  response += resolvers;
 
   // Finish it up
   response += `\n\nconst schema = makeExecutableSchema({\n\ttypeDefs,\n\tresolvers,\n});\n\nexport default schema;`;
 
   return response;
-  // Post
-  //const posts = map(filter(data, { verb: 'post'}), partialRight(pick, picks));
-  // Patch
-  //const patches = map(filter(data, { verb: 'patch'}), partialRight(pick, picks));
-  // Delete
-  //const deletes = map(filter(data, { verb: 'delete'}), partialRight(pick, picks));
 }
 
 const createEndpointSchema = (libPath, dest, name, data) => {

@@ -89,10 +89,9 @@ const endpointCommand = (to, { destination, index, graphql }) => {
         fs.appendFileSync(graphqlSchemaPath, 'import { mergeSchemas } from \'graphql-tools\'\n');
         fs.appendFileSync(graphqlSchemaPath, 'import graphqlHTTP from \'express-graphql\'\n');
       }
-
       return Promise.all(
         groups.map(({ name }) => {
-          const endpointName = name.toLowerCase()
+          const endpointName = name.toLowerCase();
           const gelatoGroup = kebabCase(endpointName);
           const data = fs.readFileSync(endpointTemplatePath, 'utf8');
           return fetch(`${ENDOINTS_URL}/master/${gelatoGroup}.json`)
@@ -136,6 +135,7 @@ const endpointCommand = (to, { destination, index, graphql }) => {
               return schema;
           })
           .catch((err) => {
+            err.preName = name;
             err.endpoint = endpointName;
             err.reason = 'Fetch';
 
@@ -153,7 +153,7 @@ const endpointCommand = (to, { destination, index, graphql }) => {
       })
       .catch((err) => {
         if (err.endpoint && err.reason) {
-          console.error(`Failed to fetch and parse JSON for endpoint: ${err.endpoint} failed at step: ${err.reason}`);
+          console.error(`Failed to fetch and parse JSON for endpoint: ${err.endpoint} (${err.preName}) failed at step: ${err.reason}`);
         }
 
         throw err;
